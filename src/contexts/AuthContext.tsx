@@ -103,11 +103,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return { error };
   };
 
+  const emailRedirectTo = typeof window !== 'undefined' ? window.location.origin : undefined;
+
   const signUp = async (email: string, password: string, name: string, productPin: string) => {
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
-      options: { data: { display_name: name, product_pin: productPin } },
+      options: {
+        emailRedirectTo,
+        data: { display_name: name, product_pin: productPin },
+      },
     });
     const needsEmailVerification = !data.session;
     return { error, needsEmailVerification };
@@ -126,6 +131,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const { error } = await supabase.auth.resend({
       type: 'signup',
       email,
+      options: { emailRedirectTo },
     });
     return { error };
   };
