@@ -78,7 +78,7 @@ export default function UtangPayments() {
       amount,
       type: 'payment',
       note: 'Payment received (Utang Payment page)',
-      created_by: user?.id,
+      created_by: user!.id,
     });
     if (error) {
       toast({ title: error.message, variant: 'destructive' });
