@@ -7,18 +7,16 @@ import { Eye, EyeOff, Store } from 'lucide-react';
 const DEFAULT_SIGNUP_COOLDOWN = 60;
 
 export default function Auth() {
-  const { signIn, signUp, verifySignUpOtp, resendSignUpOtp } = useAuth();
+  const { signIn, signUp, resendSignUpOtp } = useAuth();
   const [isLogin, setIsLogin] = useState(true);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [secretPin, setSecretPin] = useState('');
   const [displayName, setDisplayName] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [retryAfterSeconds, setRetryAfterSeconds] = useState(0);
   const [showPassword, setShowPassword] = useState(false);
   const [awaitingOtp, setAwaitingOtp] = useState(false);
-  const [otpCode, setOtpCode] = useState('');
   const [pendingSignupEmail, setPendingSignupEmail] = useState('');
   const [resendLoading, setResendLoading] = useState(false);
 
@@ -47,7 +45,7 @@ export default function Auth() {
 
     if (!isLogin && pendingSignupEmail === email.trim().toLowerCase() && !awaitingOtp) {
       setAwaitingOtp(true);
-      setError('An OTP may already be sent to this email. Enter it below instead of creating again.');
+      setError('Confirm your signup. Follow the email link and click "Confirm your mail".');
       return;
     }
 
@@ -58,8 +56,7 @@ export default function Auth() {
       if (error) setError(error.message);
     } else {
       if (!displayName.trim()) { setError('Please enter your name'); setLoading(false); return; }
-      if (!/^\d{4}$/.test(secretPin)) { setError('Please set a 4-digit secret PIN for product access.'); setLoading(false); return; }
-      const { error, needsEmailVerification } = await signUp(email, password, displayName, secretPin);
+      const { error, needsEmailVerification } = await signUp(email, password, displayName);
       if (error) {
         const message = error.message || 'Signup failed.';
         const isRateLimited = error.status === 429 || error.code?.includes('rate_limit');
@@ -68,7 +65,7 @@ export default function Auth() {
           setRetryAfterSeconds(waitSeconds);
           setPendingSignupEmail(email.trim().toLowerCase());
           setAwaitingOtp(true);
-          setError(`Too many signup attempts. OTP may already be sent. Wait ${waitSeconds}s if needed, then verify the OTP.`);
+          setError(`Too many signup attempts. Confirmation email may already be sent. Wait ${waitSeconds}s, then click "Confirm your mail".`);
         } else {
           setError(message);
         }
@@ -76,28 +73,28 @@ export default function Auth() {
         setPendingSignupEmail(email.trim().toLowerCase());
         setRetryAfterSeconds(DEFAULT_SIGNUP_COOLDOWN);
         setAwaitingOtp(true);
-        setError('We sent an OTP to your email. Enter it below to finish creating your account.');
+        setError('Confirm your signup. Follow this link to confirm your user: Confirm your mail.');
       }
     }
     setLoading(false);
   };
 
-  const handleVerifyOtp = async (e: React.FormEvent) => {
+  const handleEmailVerifiedSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
-    if (!otpCode.trim()) {
-      setError('Please enter the OTP code sent to your email.');
-      return;
-    }
     setLoading(true);
-    const { error } = await verifySignUpOtp(email, otpCode.trim());
+    const { error } = await signIn(email, password);
     if (error) {
-      setError(error.message);
+      const isNotVerified = /not confirmed|email.*confirm|verify/i.test(error.message || '');
+      setError(
+        isNotVerified
+          ? 'Email is not verified yet. Open your email and click "Confirm your mail", then try again.'
+          : error.message,
+      );
     } else {
       setPendingSignupEmail('');
       setRetryAfterSeconds(0);
       setAwaitingOtp(false);
-      setOtpCode('');
     }
     setLoading(false);
   };
@@ -110,25 +107,25 @@ export default function Auth() {
       return;
     }
     if (retryAfterSeconds > 0) {
-      setError(`Please wait ${retryAfterSeconds}s before requesting another OTP.`);
+      setError(`Please wait ${retryAfterSeconds}s before requesting another confirmation email.`);
       return;
     }
 
     setResendLoading(true);
     const { error } = await resendSignUpOtp(normalizedEmail);
     if (error) {
-      const message = error.message || 'Failed to resend OTP.';
+      const message = error.message || 'Failed to resend confirmation email.';
       const isRateLimited = error.status === 429 || error.code?.includes('rate_limit');
       if (isRateLimited) {
         const waitSeconds = getRetryAfterSeconds(message);
         setRetryAfterSeconds(waitSeconds);
-        setError(`Too many requests. Please wait ${waitSeconds}s before resending OTP.`);
+        setError(`Too many requests. Please wait ${waitSeconds}s before resending confirmation email.`);
       } else {
         setError(message);
       }
     } else {
       setRetryAfterSeconds(DEFAULT_SIGNUP_COOLDOWN);
-      setError('OTP sent. Please check your email inbox/spam and enter the code.');
+      setError('Confirm your signup. Follow this link to confirm your user: Confirm your mail.');
     }
     setResendLoading(false);
   };
@@ -146,10 +143,10 @@ export default function Auth() {
 
         <div className="bg-card rounded-xl border p-6 shadow-sm">
           <h2 className="font-display text-lg font-semibold text-card-foreground mb-4">
-            {isLogin ? 'Sign In' : awaitingOtp ? 'Verify Email OTP' : 'Create Account'}
+            {isLogin ? 'Sign In' : awaitingOtp ? 'Verify Your Email' : 'Create Account'}
           </h2>
 
-          <form onSubmit={awaitingOtp ? handleVerifyOtp : handleSubmit} className="space-y-3">
+          <form onSubmit={awaitingOtp ? handleEmailVerifiedSubmit : handleSubmit} className="space-y-3">
             {!isLogin && !awaitingOtp && (
               <div>
                 <label className="text-sm font-medium text-foreground">Name</label>
@@ -184,38 +181,19 @@ export default function Auth() {
                     </button>
                   </div>
                 </div>
-                {!isLogin && (
-                  <div>
-                    <label className="text-sm font-medium text-foreground">Secret PIN for Add Product *</label>
-                    <Input
-                      type="password"
-                      inputMode="numeric"
-                      maxLength={4}
-                      value={secretPin}
-                      onChange={e => setSecretPin(e.target.value.replace(/\D/g, '').slice(0, 4))}
-                      placeholder="4-digit PIN"
-                      required
-                    />
-                  </div>
-                )}
               </>
             )}
             {awaitingOtp && (
-              <div>
-                <label className="text-sm font-medium text-foreground">OTP Code</label>
-                <Input
-                  value={otpCode}
-                  onChange={e => setOtpCode(e.target.value)}
-                  placeholder="Enter 6-digit code"
-                  required
-                />
-              </div>
+              <p className="text-sm text-muted-foreground">
+                Confirm your signup for <span className="font-medium text-foreground">{pendingSignupEmail || email}</span>. Follow this link to confirm your
+                user: <span className="font-medium text-foreground">Confirm your mail</span>.
+              </p>
             )}
 
             {error && <p className="text-sm text-destructive">{error}</p>}
 
             <Button type="submit" className="w-full" disabled={loading || (!isLogin && retryAfterSeconds > 0 && !awaitingOtp)}>
-              {loading ? 'Please wait...' : isLogin ? 'Sign In' : awaitingOtp ? 'Verify OTP' : 'Create Account'}
+              {loading ? 'Please wait...' : isLogin ? 'Sign In' : awaitingOtp ? 'I Clicked "Confirm your mail"' : 'Create Account'}
             </Button>
             {awaitingOtp && (
               <Button
@@ -225,7 +203,7 @@ export default function Auth() {
                 disabled={resendLoading || retryAfterSeconds > 0}
                 onClick={handleResendOtp}
               >
-                {resendLoading ? 'Sending OTP...' : retryAfterSeconds > 0 ? `Resend OTP in ${retryAfterSeconds}s` : 'Resend OTP'}
+                {resendLoading ? 'Sending Email...' : retryAfterSeconds > 0 ? `Resend in ${retryAfterSeconds}s` : 'Resend Confirmation Email'}
               </Button>
             )}
           </form>
@@ -242,7 +220,7 @@ export default function Auth() {
             <p className="text-sm text-center mt-4 text-muted-foreground">
               Wrong email?{' '}
               <button
-                onClick={() => { setAwaitingOtp(false); setOtpCode(''); setError(''); }}
+                onClick={() => { setAwaitingOtp(false); setError(''); }}
                 className="text-primary font-medium hover:underline"
               >
                 Back to signup

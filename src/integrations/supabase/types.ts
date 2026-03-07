@@ -111,18 +111,21 @@ export type Database = {
           created_at: string
           display_name: string
           id: string
+          product_pin_hash: string | null
           user_id: string
         }
         Insert: {
           created_at?: string
           display_name?: string
           id?: string
+          product_pin_hash?: string | null
           user_id: string
         }
         Update: {
           created_at?: string
           display_name?: string
           id?: string
+          product_pin_hash?: string | null
           user_id?: string
         }
         Relationships: []
@@ -319,10 +322,26 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      ensure_my_role: {
+        Args: Record<PropertyKey, never>
+        Returns: undefined
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
           _user_id: string
+        }
+        Returns: boolean
+      }
+      set_my_product_pin: {
+        Args: {
+          _pin: string
+        }
+        Returns: undefined
+      }
+      verify_my_product_pin: {
+        Args: {
+          _pin: string
         }
         Returns: boolean
       }

@@ -9,13 +9,13 @@ interface AuthContextType {
   role: 'admin' | 'cashier' | null;
   displayName: string;
   signIn: (email: string, password: string) => Promise<{ error: AuthError | null }>;
-  signUp: (email: string, password: string, displayName: string, productPin: string) => Promise<{ error: AuthError | null; needsEmailVerification: boolean }>;
-  verifySignUpOtp: (email: string, token: string) => Promise<{ error: AuthError | null }>;
+  signUp: (email: string, password: string, displayName: string) => Promise<{ error: AuthError | null; needsEmailVerification: boolean }>;
   resendSignUpOtp: (email: string) => Promise<{ error: AuthError | null }>;
   signOut: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
+const ENSURE_ROLE_RPC_MISSING_KEY = 'ensure_my_role_rpc_missing';
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
@@ -23,7 +23,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [role, setRole] = useState<'admin' | 'cashier' | null>(null);
   const [displayName, setDisplayName] = useState('');
-  const ensureRoleRpcUnavailableRef = useRef(false);
+  const ensureRoleRpcUnavailableRef = useRef(
+    typeof window !== 'undefined' && window.localStorage.getItem(ENSURE_ROLE_RPC_MISSING_KEY) === '1',
+  );
 
   const fetchRole = async (userId: string) => {
     const { data, error } = await supabase
@@ -62,6 +64,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const { error } = await supabase.rpc('ensure_my_role');
       if (error?.status === 404 || error?.code === 'PGRST202' || error?.code === '42883') {
         ensureRoleRpcUnavailableRef.current = true;
+        if (typeof window !== 'undefined') {
+          window.localStorage.setItem(ENSURE_ROLE_RPC_MISSING_KEY, '1');
+        }
         await fetchProfile(userId);
         return;
       }
@@ -105,26 +110,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const emailRedirectTo = typeof window !== 'undefined' ? window.location.origin : undefined;
 
-  const signUp = async (email: string, password: string, name: string, productPin: string) => {
+  const signUp = async (email: string, password: string, name: string) => {
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
       options: {
         emailRedirectTo,
-        data: { display_name: name, product_pin: productPin },
+        data: { display_name: name },
       },
     });
     const needsEmailVerification = !data.session;
     return { error, needsEmailVerification };
-  };
-
-  const verifySignUpOtp = async (email: string, token: string) => {
-    const { error } = await supabase.auth.verifyOtp({
-      email,
-      token,
-      type: 'signup',
-    });
-    return { error };
   };
 
   const resendSignUpOtp = async (email: string) => {
@@ -141,7 +137,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, session, loading, role, displayName, signIn, signUp, verifySignUpOtp, resendSignUpOtp, signOut }}>
+    <AuthContext.Provider value={{ user, session, loading, role, displayName, signIn, signUp, resendSignUpOtp, signOut }}>
       {children}
     </AuthContext.Provider>
   );

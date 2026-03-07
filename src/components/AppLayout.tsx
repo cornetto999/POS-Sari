@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { LayoutDashboard, ShoppingCart, Package, Users, Receipt, Menu, X, Store, LogOut } from 'lucide-react';
+import { LayoutDashboard, ShoppingCart, Package, Users, Receipt, Menu, X, Store, LogOut, Settings } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 
 const navItems = [
@@ -9,6 +9,7 @@ const navItems = [
   { path: '/products', label: 'Products', icon: Package },
   { path: '/customers', label: 'Customers & Utang', icon: Users },
   { path: '/transactions', label: 'Transactions', icon: Receipt },
+  { path: '/settings', label: 'Settings', icon: Settings },
 ];
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {

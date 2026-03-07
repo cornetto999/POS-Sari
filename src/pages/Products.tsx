@@ -96,11 +96,17 @@ export default function Products() {
   const handleVerifyPin = async () => {
     const { data, error } = await supabase.rpc('verify_my_product_pin', { _pin: pinInput });
     if (error) {
+      const isMissingRpcFunction =
+        error.status === 404 || error.code === 'PGRST202' || /could not find the function/i.test(error.message || '');
+      if (isMissingRpcFunction) {
+        setPinError('PIN verify is not ready yet. Run Supabase migrations (missing: verify_my_product_pin).');
+        return;
+      }
       setPinError(error.message);
       return;
     }
     if (!data) {
-      setPinError('Incorrect PIN');
+      setPinError('Incorrect PIN or no PIN set yet. Set your PIN in Settings.');
       return;
     }
     setPinUnlocked(true);
